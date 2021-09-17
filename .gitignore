@@ -1,2 +1,3 @@
 *.sublime-project
 *.sublime-workspace
+abduction_memorability/__pycache__

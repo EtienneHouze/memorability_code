@@ -69,14 +69,14 @@ class SurpriseAbductionModule(AbductionModule):
             self.__compute_complexities()
             self.__computes_all_abs_surprises()
 
-    def abduction(self, consequence):
+    def abduction(self, consequence_id: int):
         """Implementation of the super method "abduction"
         Args:
-            consequence (Event): Event from the memory of the
+            consequence_id (int): ID of the event from the memory
         Returns:
             TYPE: Description
         """
-        return self.__surprise_scores(consequence)
+        return self.__surprise_scores(self._memory.get_event_by_id(consequence_id))
 
     #############################################################
     #       ACCESSORS                                           #
@@ -329,7 +329,7 @@ class SurpriseAbductionModule(AbductionModule):
                                 self.__memories_by_event[event].append(new_mem)
                             if len(new_mem) == 1:
                                 event = new_mem.item()
-                                new_complex = predicate.program_length() +
+                                new_complex = predicate.program_length() +\
                                     m.log2(num_predicates) + 1 + prev_complex
                                 if event in self.__designations:
                                     self.__designations[event].append(
@@ -337,14 +337,14 @@ class SurpriseAbductionModule(AbductionModule):
                                 else:
                                     self.__designations[event] = [
                                         (new_mem.recipe(), new_complex)]
-                                new_complex = predicate.program_length() +
+                                new_complex = predicate.program_length() +\
                                     m.log2(num_predicates) + 1 + prev_complex
                                 if self.__complexities[event] > new_complex:
                                     improved += 1
                                     self.__complexities[event] = new_complex
                                     self.__recipes[event] = new_mem.recipe()
                             if len(new_mem) > 1:
-                                new_complex = predicate.program_length() +
+                                new_complex = predicate.program_length() +\
                                     m.log2(num_predicates) + 1 + prev_complex
                                 next_memories.append((new_mem, new_complex))
                             program += 1
@@ -352,8 +352,6 @@ class SurpriseAbductionModule(AbductionModule):
         print(f"Finished pass {pass_number} in {end_time - start_time}s.")
         print(f"Improved complexity for {improved} event(s)")
         return next_memories
-        
-
 
     def __complexity_iterative(self, should_plot=True):
         """
@@ -371,8 +369,8 @@ class SurpriseAbductionModule(AbductionModule):
         # Looping trhough passes
         while len(current_memories) > 0:
             next_memories = self.__one_complexity_iteration(
-                                                    pass_number,
-                                                    current_memories)
+                pass_number,
+                current_memories)
             pass_number += 1
             current_memories = next_memories
             # Commented for notebook
@@ -523,6 +521,8 @@ class SurpriseAbductionModule(AbductionModule):
                 s (set) : used to tell which events are the true ones
                 f (filtering): use the memorability score as an event filtering
                     tool
+                a (abduction): use memorability-based abduction to find possible
+                    causes for the given event
         """
         true_events = set()
         while True:

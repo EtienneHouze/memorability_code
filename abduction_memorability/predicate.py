@@ -24,7 +24,7 @@ class Predicate:
     filtering.
     """
 
-    def __init__(self, mem: Memory, prog: int, aux_predicate = None):
+    def __init__(self, mem: Memory, prog: int, aux_predicate=None):
         self._mem = mem
         self._prog = prog
         self.aux_predicate = aux_predicate
@@ -75,9 +75,9 @@ class DayPredicate(Predicate):
             e_date = dt.datetime.fromtimestamp(e_time)
             last_date = dt.datetime.fromtimestamp(self._mem.get_last_time())
             n_days_ago = last_date - dt.timedelta(days=self._prog)
-            return (e_date.year == n_days_ago.year 
-                and e_date.month == n_days_ago.month
-                and e_date.day == n_days_ago.day)
+            return (e_date.year == n_days_ago.year
+                    and e_date.month == n_days_ago.month
+                    and e_date.day == n_days_ago.day)
         else:
             aux_time = self.aux_predicate.get_char("timestamp")
             aux_date = dt.datetime.fromtimestamp(aux_time)
@@ -163,7 +163,7 @@ class DevicePredicate(Predicate):
     """
         This simple predicate checks the device of the recorded event.
         It returns false for all programs if the event has no attached device.
-        
+
         Args:
             mem (Memory): pointer to the memory upon which this predicate will
         operate. 

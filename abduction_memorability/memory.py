@@ -5,7 +5,7 @@ the class comes with possible orders, that should be used by predicates.
 """
 #pylint:disable=relative-beyond-top-level
 import datetime as dt
-from clean_project.event import Event, Label, display_timeline
+from abduction_memorability.event import Event, Label, display_timeline
 import bisect
 from collections.abc import Iterable
 import pandas as pd

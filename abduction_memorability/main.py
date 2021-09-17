@@ -8,28 +8,23 @@
     a few minutes for sets containing thousands of examples.
 
     If numerous import errors persists, try adding the root folder of the 
-    "clean_project" into the PYTHONPATH environmnent variable.
+    "abduction_memorability" into the PYTHONPATH environmnent variable.
 """
 import argparse
-try:
-    from clean_project.abduction_predicate import SurpriseAbductionModule
-    from clean_project.memory import Memory
-    from clean_project.predicate import *
-except ModuleNotFoundError:
-    import sys
-    sys.path.append("/home/etienne/thesis/abduction_event/paper/")
-    from clean_project.abduction_predicate import SurpriseAbductionModule
-    from clean_project.memory import Memory
-    from clean_project.predicate import *
+from abduction_memorability.abduction_module import SurpriseAbductionModule
+from abduction_memorability.memory import Memory
+from abduction_memorability.predicate import HasLabelPredicate, AxisRankPredicate, DayPredicate,\
+    DevicePredicate, LocationPredicate
 
 EPILOG_STR = "This script is meant to accompany the paper \"Memorability\" score"
+
 
 def main():
     global EPILOG_STR
     parser = argparse.ArgumentParser(description=__doc__, epilog=EPILOG_STR)
     parser.add_argument("file", help="Name of an event file 'csv' to load")
-    parser.add_argument("--depth", help="Maximum depth of retriveal paths used"+ 
-        " for complexity computation", default=4, type=int)
+    parser.add_argument("--depth", help="Maximum depth of retriveal paths used" +
+                        " for complexity computation", default=4, type=int)
     # parser.error("Please enter the path to a file containing events as main " +
     #     "argument.")
     args = parser.parse_args()
@@ -42,14 +37,14 @@ def main():
         return
     module = SurpriseAbductionModule(memory=mem,
                                      predicates=[
-                                        HasLabelPredicate,
-                                        AxisRankPredicate,
-                                        DayPredicate,
-                                        DevicePredicate,
-                                        LocationPredicate
-                                        ],
+                                         HasLabelPredicate,
+                                         AxisRankPredicate,
+                                         DayPredicate,
+                                         DevicePredicate,
+                                         LocationPredicate
+                                     ],
                                      max_depth=max_depth
-                                    )
+                                     )
     module.main_loop()
 
 

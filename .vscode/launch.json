@@ -1,0 +1,22 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Main",
+            "type": "python",
+            "request": "launch",
+            "program": "abduction_memorability/main.py",
+            "console": "integratedTerminal",
+            "args": [
+                "events/420_events.csv"
+            ],
+            "env": {
+                "PYTHONPATH": "/home/etienne/thesis/memorability_computation"
+            },
+            "python": "/home/etienne/thesis/venv/bin/python"
+        }
+    ]
+}

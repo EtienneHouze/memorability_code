@@ -24,7 +24,7 @@ class Memory:
         :recipe: the recipe used to obtain the memory
     """
 
-    def __init__(self, events: Iterable[Event] = None, recipe: list = None):
+    def __init__(self, events: Iterable[Event] = None, recipe: list = None, complexity: int = 0):
         self.__events = set()
         # we keep track of the rankings, even though they are not accessible from the
         # outside
@@ -47,6 +47,7 @@ class Memory:
         self.__events_par_char_value = {}
         self.__recipe = recipe
         self.__last_timestamp = -1
+        self.__complexity = complexity
         self.__first_time = math.inf
         if self.__recipe is None:
             self.__recipe = []
@@ -54,6 +55,9 @@ class Memory:
             self.extend(events)
         else:
             self.extend([])
+
+    def complexity(self) -> int:
+        return self.__complexity
 
     def __len__(self):
         return len(self.__events)
@@ -128,13 +132,15 @@ class Memory:
             Loads a csv file into a pd dataframe, then an EventCollection
         """
         tmp_df = pd.read_csv(csv_file)
+        print(tmp_df.columns)
         events_list = []
-        for _, row in tmp_df.iterrows():
+        for index, row in tmp_df.iterrows():
             row = row.dropna()
             chars = {}
             for key in row.index:
                 if key not in ["Unnamed: 0", "timestamp", "duration", "label"]:
                     chars[key] = row.loc[key]
+            print(index)
             new_event = Event(
                 timestamp=row.loc["timestamp"],
                 duration=row.loc["duration"],
@@ -304,6 +310,8 @@ class Memory:
         too different to apply any comparison operation
         """
         labels = self.labels()
+        if len(labels) <= 1:
+            return True
         return len(self.__labels[labels[1]]) - len(self.__labels[Label()]) == 0
 
     def clever_axes(self):
@@ -360,6 +368,12 @@ class Memory:
             returns a list of devices in the memory
         """
         return self.__events_by_device.keys()
+
+    def get_biggest_id(self) -> int:
+        """
+            Returns the biggest id in the memory
+        """
+        return max(self.__events_by_id.keys())
 
     def labels(self):
         """

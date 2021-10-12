@@ -57,6 +57,46 @@ class Label:
     def __hash__(self):
         return hash(str(self))
 
+    def distance_to(self, other_label) -> int:
+        """Computes the ancestral distance between two labels
+
+        Args:
+            other_label ([type]): [description]
+
+        Returns:
+            int: [description]
+        """
+        if other_label.__class__ != Label:
+            return math.inf
+        if self == other_label:
+            return 0
+        mapping = {self: 0}
+        other_mapping = {other_label: 0}
+        current = self
+        distance = 1
+        while current.parent is not None:
+            current = current.parent
+            mapping[current] = distance
+            distance += 1
+        current = other_label
+        distance = 1
+        while current.parent is not None:
+            current = current.parent
+            other_mapping[current] = distance
+            distance += 1
+        best = None
+        min_score = math.inf
+        for key in mapping:
+            if key in other_mapping:
+                if mapping[key] + other_mapping[key] < min_score:
+                    best = key
+                    min_score = mapping[key] + other_mapping[key]
+        return min_score
+
+
+
+
+
     @classmethod
     def from_str(cls, _str):
         try:

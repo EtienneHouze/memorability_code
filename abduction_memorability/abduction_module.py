@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from progress.bar import Bar
 import time
 import datetime as dt
-
+from typing import Tuple
 from IPython.display import display
 from ipywidgets import interactive
 
@@ -16,7 +16,7 @@ from mpld3._server import serve
 from abduction_memorability.event import Event
 from abduction_memorability.memory import Memory
 from abduction_memorability.predicate import Predicate
-from abduction_memorability.predicate_filter import Filter, OptimizedFilter
+from abduction_memorability.predicate_filter import Filter, OptimizedFilter, NewFilter
 from abduction_memorability.helpers import Helpers
 import math as m
 from matplotlib import pyplot as plt
@@ -52,7 +52,7 @@ class AbductionModule(ABC):
 class SurpriseAbductionModule(AbductionModule):
     def __init__(self, memory=None, **kwargs):
         super().__init__(memory)
-        self._predicates: list[Predicate] = kwargs.get("predicates", [])
+        self._predicates: list[type] = kwargs.get("predicates", [])
         self.max_depth = kwargs.get("max_depth", 4)
         self.max_complex = kwargs.get("max_complexity", 40)
         # Field to keep all figures in memory before plotting them
@@ -69,14 +69,14 @@ class SurpriseAbductionModule(AbductionModule):
             self.__compute_complexities()
             self.__computes_all_abs_surprises()
 
-    def abduction(self, consequence_id: int):
+    def abduction(self, consequence_id: int) -> list[Tuple[Event, int]]:
         """Implementation of the super method "abduction"
         Args:
             consequence_id (int): ID of the event from the memory
         Returns:
             TYPE: Description
         """
-        return self.__surprise_scores(self._memory.get_event_by_id(consequence_id))
+        return self.__relative_memorability_scores(self._memory.get_event_by_id(consequence_id))
 
     #############################################################
     #       ACCESSORS                                           #
@@ -153,37 +153,78 @@ class SurpriseAbductionModule(AbductionModule):
             print("Problem retrieving event in __surprise_relative_id")
         return self.__event_surprise_relative(hypothesis, consequence)
 
+    def get_event_by_id(self, id):
+        return self._memory.get_event_by_id(id)
+
     #############################################################
     #       Helpers                                             #
     #############################################################
 
-    def __surprise_scores(self, consequence: Event):
+    def __relative_memorability_scores(self, consequence: Event):
         """
-            Computes the surprise scores relative to the consequence event
+            Computes the surprise scores relative to the consequence event. The relative memorability score is used for
+        the abduction process 
         """
-        surprises = {}
-        associated_memories = self.__memories_by_event[consequence]
-        print("Number of associated memories:" + str(len(associated_memories)))
-        for recipe in self.__designations[consequence]:
-            print(recipe)
-        for mem in associated_memories:
-            mem: Memory
-            mean_cplx = sum([self.__complexities[event] for event in mem])
-            mean_cplx = mean_cplx / len(mem)
-            for event in mem:
+        # ! first, we compute the relative description complexity for all events
+        relative_complexities = {event: m.inf for event in self._memory}
+        recipes = {}
+        candidates = {}
+        current_memories = [self._memory]
+        memories_to_explore = []
+        for pass_number in range(self.max_depth):
+            for mem in current_memories:
+                for predicate in self._predicates:
+                    current_filter = NewFilter(predicate)
+                    for prog in range(0, len(self._memory)):
+                        new_mem = current_filter(mem, prog, consequence)
+                        if new_mem is None:
+                            break
+                        if len(new_mem) == 1:
+                            event: Event
+                            for e in new_mem:
+                                event = e
+                            if new_mem.complexity() < relative_complexities[event]:
+                                print(f'\t\tScore improved for {event.get_id()}: {new_mem.complexity()}')
+                                relative_complexities[event] = new_mem.complexity()
+                                recipes[event] = new_mem.recipe()
+                        if len(new_mem) > 1:
+                            print(
+                                f'\t{prog=}, pred={predicate.__name__} : {len(new_mem)} events found, with complexity {new_mem.complexity()}')
+                            memories_to_explore.append(new_mem)
+            current_memories = memories_to_explore
+            memories_to_explore = []
+        for event in relative_complexities:
+            print(f'{event.get_id()}: {relative_complexities[event]} -> {recipes[event]}')
+        print("\n\n Now computing the neighbourhoods!")
+        neighbourhoods: dict[Predicate, Memory] = {}
+        for predicate in self._predicates:
+            p_filter = NewFilter(predicate)
+            for prog in range(0, 1000):
+                filtered = p_filter(self._memory, prog, consequence)
+                if filtered is None:
+                    break
+                neighbourhoods[predicate(self._memory, prog, consequence)] = filtered
+        expected_complexities = {}
+        abduction_scores = {}
+        for event in self._memory:
+            score = 0
+            size = 0
+            for neigh in neighbourhoods.values():
+                if event in neigh:
+                    for e_prime in neigh:
+                        score += relative_complexities[e_prime]
+                    size += len(neigh)
+            if size != 0:
+                expected_complexities[event] = score / size
                 if event.timestamp < consequence.timestamp:
-                    surprise = abs(mean_cplx - self.__complexities[event])
-                    if event in surprises:
-                        surprises[event].append(surprise)
-                    else:
-                        surprises[event] = [surprise]
-        for event in surprises:
-            surprises[event] = sum(surprises[event]) / len(surprises[event])
-        best_candidates = sorted(
-            surprises.keys(), key=lambda k: surprises[k], reverse=True)[:10]
-        for candidate in best_candidates:
-            print(f"\t\t{candidate.get_id()}: {surprises[candidate]}")
-        return best_candidates
+                    abduction_scores[event] = abs((score/size) - relative_complexities[event])
+                else:
+                    abduction_scores[event] = 0
+            else:
+                expected_complexities[event] = m.inf
+                abduction_scores[event] = 0
+            print(f"score for {event.get_id()}: {abs(relative_complexities[event] - expected_complexities[event])}")
+        return sorted([(event, abduction_scores[event]) for event in abduction_scores], key=lambda pair: abduction_scores[pair[0]], reverse=True)
 
     def __event_surprise_relative(self,
                                   event: Event,

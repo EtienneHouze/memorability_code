@@ -17,7 +17,7 @@ __author__ = "Étienne Houzé"
 
 class Predicate:
     """
-        Predicates are defined with a pointer to the memory.#!/usr/bin/env python
+        Predicates are defined with a pointer to the memory.
     They can then be called on events from this memory. If they are not applicable (
     because the memory is not compatible, index out of bound, etc), calling them will
     return None (undefined) instead of a boolean value. This could be used to optimize
@@ -27,7 +27,7 @@ class Predicate:
     def __init__(self, mem: Memory, prog: int, aux_predicate=None):
         self._mem = mem
         self._prog = prog
-        self.aux_predicate = aux_predicate
+        self.aux_predicate: Event = aux_predicate
 
     def __call__(self, event: Event) -> bool:
         pass
@@ -83,7 +83,7 @@ class DayPredicate(Predicate):
             aux_date = dt.datetime.fromtimestamp(aux_time)
             e_time = event.get_char("timestamp")
             e_date = dt.datetime.fromtimestamp(e_time)
-            n_days_ago = aux_date - dt.timedelta(days=self.prog)
+            n_days_ago = aux_date - dt.timedelta(days=self._prog)
             return (e_date.year == n_days_ago.year and e_date.month == n_days_ago.month
                     and e_date.day == n_days_ago.day)
 
@@ -123,8 +123,8 @@ class AxisRankPredicate(Predicate):
         to fetch the ranking of the predicate alongside the axis.
     """
 
-    def __init__(self, mem: Memory, prog: int):
-        super().__init__(mem, prog)
+    def __init__(self, mem: Memory, prog: int, aux_predicate=None):
+        super().__init__(mem, prog, aux_predicate=aux_predicate)
         self._axis = self._prog // len(self._mem)
         self._rank = self._prog % len(self._mem)
         self._original_axis = self._axis
@@ -171,8 +171,8 @@ class DevicePredicate(Predicate):
         predicate.
     """
 
-    def __init__(self, mem: Memory, prog: int):
-        super().__init__(mem, prog)
+    def __init__(self, mem: Memory, prog: int, aux_predicate=None):
+        super().__init__(mem, prog, aux_predicate=aux_predicate)
         self._device = prog
 
     def __call__(self, event: Event):
@@ -183,7 +183,10 @@ class DevicePredicate(Predicate):
             return None
 
     def __str__(self):
-        return f"device({list(self._mem.get_devices())[self._device]})"
+        try:
+            return f"device({list(self._mem.get_devices())[self._device]})"
+        except IndexError:
+            return 'device(undefined)'
 
 
 class LocationPredicate(Predicate):
@@ -194,6 +197,10 @@ class LocationPredicate(Predicate):
         Args:
             mem (Memory): pointer to the memory upon which this predicate will
         operate.
+            prog: Which location to consider, encoded as an int. The most used location in the memory is encoded as 0, 
+        then 1, ....
+            aux_predicate: If provided, returns true if the target event occurred in the same location as the other aux 
+        event
     """
 
     def __init__(self, mem: Memory, prog: int, aux_predicate=None):
@@ -204,14 +211,11 @@ class LocationPredicate(Predicate):
         try:
             if self.aux_predicate is not None:
                 if self._prog == 0:
-                    return event.get_char("Location") == \
-                        self.aux_predicate.get_char("Location")
+                    return event.get_char("Location") == self.aux_predicate.get_char("Location")
                 else:
-                    return event.get_char("Location") == \
-                        self._mem.get_zones(self._location + 1)
+                    return event.get_char("Location") == self._mem.get_zones(self._location + 1)
             else:
-                return event.get_char("Location") == \
-                    self._mem.get_zones(self._location)
+                return event.get_char("Location") == self._mem.get_zones(self._location)
         except Exception:
             return None
 
@@ -225,13 +229,16 @@ class LocationPredicate(Predicate):
 
 
 class HasLabelPredicate(Predicate):
-    def __init__(self, mem: Memory, prog: int):
-        super().__init__(mem, prog)
+    def __init__(self, mem: Memory, prog: int, aux_predicate=None):
+        super().__init__(mem, prog, aux_predicate=aux_predicate)
         self._label = prog
 
     def __call__(self, event: Event):
         try:
-            return event.has_label(self._mem.labels()[self._label])
+            if self.aux_predicate is None:
+                return event.has_label(self._mem.labels()[self._label])
+            else:
+                event.label == self.aux_predicate.label
         except Exception:
             return None
 
@@ -240,3 +247,14 @@ class HasLabelPredicate(Predicate):
 
     def __repr__(self):
         return str(self)
+
+
+class RandomChoicePredicate(Predicate):
+    def __init__(self, mem, prog, aux_predicate=None):
+        super().__init__(mem, prog, aux_predicate=aux_predicate)
+
+    def __call__(self, event: Event):
+        return None
+
+    def program_length(self) -> int:
+        return Helpers.bit_length(len(self._mem))

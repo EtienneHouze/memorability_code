@@ -254,7 +254,12 @@ class RandomChoicePredicate(Predicate):
         super().__init__(mem, prog, aux_predicate=aux_predicate)
 
     def __call__(self, event: Event):
-        return None
+        if self._mem.get_biggest_id() < self._prog:
+            return None
+        return event.get_id() == self._prog
 
     def program_length(self) -> int:
         return Helpers.bit_length(len(self._mem))
+
+    def __str__(self):
+        return f"random({len(self._mem)})"

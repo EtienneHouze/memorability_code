@@ -1,5 +1,13 @@
 {
+    "editor.formatOnSave": false,
     "python.analysis.extraPaths": [
         "/home/etienne/thesis/memorability_computation"
-    ]
+    ],
+    "python.pythonPath": "/home/etienne/thesis/venv/bin/python",
+    "python.linting.enabled": true,
+    "python.testing.pytestArgs": [
+        "."
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true
 }

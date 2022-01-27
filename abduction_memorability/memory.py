@@ -56,6 +56,9 @@ class Memory:
         else:
             self.extend([])
 
+    def all_ids(self) -> list[int]:
+        return list(self.__events_by_id.keys())
+
     def complexity(self) -> int:
         return self.__complexity
 
@@ -197,6 +200,13 @@ class Memory:
         recorded in the memory
         """
         return dt.datetime.fromtimestamp(self.__first_time)
+
+    def last_date(self):
+        """
+            Returns the datetime object corresponding to the last event
+        recorded in the memory
+        """
+        return dt.datetime.fromtimestamp(self.__last_timestamp)
 
     def __append(self, event: Event):
         """

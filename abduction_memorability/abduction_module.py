@@ -10,9 +10,10 @@ import datetime as dt
 from typing import Tuple
 from IPython.display import display
 from ipywidgets import interactive
+import pandas as pd
 
-import mpld3
-from mpld3._server import serve
+# import mpld3
+# from mpld3._server import serve
 from abduction_memorability.event import Event
 from abduction_memorability.memory import Memory
 from abduction_memorability.predicate import Predicate
@@ -135,23 +136,8 @@ class SurpriseAbductionModule(AbductionModule):
             return None
         return self.__event_surprise(event)
 
-    def __surprise_relative_id(self, hypothesis_id, consequence_id) -> float:
-        """
-            Computes the memorability of the event `hypothesis_id` relative
-        to the event `consequence_id`, by pasisng the consequence_id as an
-        input program for free to all predicates used in the computation.
-        Args:
-            hypothesis_id (TYPE): Description
-            consequence_id (TYPE): Description
-        Returns:
-            float: surprise score for hypothesis, relative to consequence
-        """
-        try:
-            hypothesis = self._memory.get_event_by_id(hypothesis_id)
-            consequence = self._memory.get_event_by_id(consequence_id)
-        except Exception:
-            print("Problem retrieving event in __surprise_relative_id")
-        return self.__event_surprise_relative(hypothesis, consequence)
+    def get_memorability(self, event_id: int):
+        return self.__surprises[self.get_event_by_id(event_id)]
 
     def get_event_by_id(self, id):
         return self._memory.get_event_by_id(id)
@@ -160,7 +146,7 @@ class SurpriseAbductionModule(AbductionModule):
     #       Helpers                                             #
     #############################################################
 
-    def __relative_memorability_scores(self, consequence: Event):
+    def __relative_memorability_scores(self, consequence: Event, quick=True) -> list[Tuple[int, float]]:
         """
             Computes the surprise scores relative to the consequence event. The relative memorability score is used for
         the abduction process 
@@ -171,11 +157,12 @@ class SurpriseAbductionModule(AbductionModule):
         candidates = {}
         current_memories = [self._memory]
         memories_to_explore = []
+        # Computing relative description complexity for all
         for pass_number in range(self.max_depth):
             for mem in current_memories:
                 for predicate in self._predicates:
                     current_filter = NewFilter(predicate)
-                    for prog in range(0, len(self._memory)):
+                    for prog in range(0, 1000):
                         new_mem = current_filter(mem, prog, consequence)
                         if new_mem is None:
                             break
@@ -188,13 +175,14 @@ class SurpriseAbductionModule(AbductionModule):
                                 relative_complexities[event] = new_mem.complexity()
                                 recipes[event] = new_mem.recipe()
                         if len(new_mem) > 1:
-                            print(
-                                f'\t{prog=}, pred={predicate.__name__} : {len(new_mem)} events found, with complexity {new_mem.complexity()}')
+                            # print(
+                            #     f'\t{prog=}, pred={predicate.__name__} : {len(new_mem)} events found, with complexity {new_mem.complexity()}')
                             memories_to_explore.append(new_mem)
             current_memories = memories_to_explore
             memories_to_explore = []
         for event in relative_complexities:
-            print(f'{event.get_id()}: {relative_complexities[event]} -> {recipes[event]}')
+            # print(f'{event.get_id()}: {relative_complexities[event]} -> {recipes[event]}')
+            pass
         print("\n\n Now computing the neighbourhoods!")
         neighbourhoods: dict[Predicate, Memory] = {}
         for predicate in self._predicates:
@@ -206,14 +194,20 @@ class SurpriseAbductionModule(AbductionModule):
                 neighbourhoods[predicate(self._memory, prog, consequence)] = filtered
         expected_complexities = {}
         abduction_scores = {}
+        print("\n Now computing the average over neighborhoods")
         for event in self._memory:
             score = 0
             size = 0
             for neigh in neighbourhoods.values():
                 if event in neigh:
+                    # number_removed = 0
                     for e_prime in neigh:
+                        # if relative_complexities[e_prime] > 100:
+                        #     number_removed += 1
+                        #     print("infinity!")
+                        # else:
                         score += relative_complexities[e_prime]
-                    size += len(neigh)
+                    size += len(neigh) 
             if size != 0:
                 expected_complexities[event] = score / size
                 if event.timestamp < consequence.timestamp:
@@ -223,7 +217,7 @@ class SurpriseAbductionModule(AbductionModule):
             else:
                 expected_complexities[event] = m.inf
                 abduction_scores[event] = 0
-            print(f"score for {event.get_id()}: {abs(relative_complexities[event] - expected_complexities[event])}")
+            # print(f"score for {event.get_id()}: {abs(relative_complexities[event] - expected_complexities[event])}")
         return sorted([(event, abduction_scores[event]) for event in abduction_scores], key=lambda pair: abduction_scores[pair[0]], reverse=True)
 
     def __event_surprise_relative(self,
@@ -306,18 +300,64 @@ class SurpriseAbductionModule(AbductionModule):
             Computes and plots the surprises for all events in the memory
         """
         surprises = {}
-        print("Computing surprise scores for all events !")
+        print("Computing memorability scores for all events !")
         with Bar(max=len(self._memory)) as bar:
             for event in self._memory:
                 surprises[event] = self.__event_surprise(event)
                 bar.next()
-        if should_plot:
+        if False:
             fig = self.plot(
                 alternative=surprises,
                 title="Memorability Scores"
             )
             self.__figures.append(fig)
         self.__surprises = surprises
+
+    def __one_complexity_iteration_new(self, pass_number: int,
+                                       current_memories: list[Memory]) -> list[Memory]:
+        if pass_number >= self.max_depth:
+            return []
+        print(f'Starting pass {pass_number} with {len(current_memories)} memories to explore')
+        start_time = time.time()
+        improved = 0
+        next_memories: list[Memory] = []
+        with Bar(f'pass {pass_number}', max=len(current_memories)) as progress_bar:
+            for mem in current_memories:
+                progress_bar.next()
+                for index in range(len(self._predicates)):
+                    program = 0
+                    while program > -1:
+                        predicate = self._predicates[index](mem, program)
+                        filt = OptimizedFilter(predicate, number_of_predicates=len(self._predicates))
+                        new_mem = filt(mem)
+                        if new_mem is None:
+                            break
+                        if len(new_mem) == len(mem):
+                            program += 1
+                            continue
+                        for event in new_mem:
+                            self.__predicates_by_event[event].add(predicate)
+                            self.__memories_by_event[event].append(new_mem)
+                        if len(new_mem) == 1:
+                            event = new_mem.item()
+                            if event in self.__designations:
+                                self.__designations[event].append((new_mem.recipe(), new_mem.complexity()))
+                            else:
+                                self.__designations[event] = [(new_mem.recipe(), new_mem.complexity())]
+                            if self.__complexities[event] > new_mem.complexity():
+                                improved += 1
+                                self.__complexities[event] = new_mem.complexity()
+                                self.__recipes[event] = new_mem.recipe()
+                        if len(new_mem) > 1:
+                            if all([self.__complexities[event] < new_mem.complexity() for event in new_mem]):
+                                pass
+                            else:
+                                next_memories.append(new_mem)
+                        program += 1
+        end_time = time.time()
+        print(f"Finished pass {pass_number} in {end_time - start_time}s.")
+        print(f"Improved complexity for {improved} event(s)")
+        return next_memories
 
     def __one_complexity_iteration(self, pass_number: int,
                                    current_memories: list) -> list:
@@ -328,11 +368,11 @@ class SurpriseAbductionModule(AbductionModule):
         then computes for each one all possible filters. When an event is singled out,
         the length of the retrieval path is set to be the complexity of this event.
         A list is returned, containing the memorires to be explored for the next iteration
-        
+
         Args:
             pass_number (int): depth of the current pass
             current_memories (list): all the memories to be explored
-        
+
         Returns:
             list: A list of (memory, complexity) to be explored at the next 
         iteration
@@ -402,21 +442,19 @@ class SurpriseAbductionModule(AbductionModule):
             should_plot (bool, optional): Whether plots are made or not (yes!)
         """
 
-        current_memories = [(self._memory, 0)]
+        current_memories = [self._memory]
         next_memories = []
         pass_number = 0
         figures = []
         print(f"Computing complexities with {self.max_depth} passes")
         # Looping trhough passes
         while len(current_memories) > 0:
-            next_memories = self.__one_complexity_iteration(
-                pass_number,
-                current_memories)
+            next_memories = self.__one_complexity_iteration_new(pass_number, current_memories)
             pass_number += 1
             current_memories = next_memories
             # Commented for notebook
-            pass_figure = self.plot(title=f"After {pass_number} pass(es)")
-            self.__figures.append(pass_figure)
+            # pass_figure = self.plot(title=f"After {pass_number} pass(es)")
+            # self.__figures.append(pass_figure)
 
     #############################################################
     #           PLOTTING AND PRINTING STUFF                     #
@@ -544,6 +582,35 @@ class SurpriseAbductionModule(AbductionModule):
         plt.ylabel("True Positive Rate")
         plt.title("ROC Curve")
         plt.show()
+
+    def dataframe_output(self) -> pd.DataFrame:
+        """Generates and returns a dataframe object containing different columns,
+        to display, for each event, its computed memorability and complexity
+        scores.
+
+        Returns:
+            pd.DataFrame: columns: [date, time, id, label, recipe, complexity, 
+            memorability]
+        """
+        df_dict = {
+            "id": [],
+            'time': [],
+            'label': [],
+            'complexity': [],
+            'recipe': [],
+            'memorability': []
+        }
+        for event in self._memory:
+            event_id = event.get_id()
+            df_dict["id"].append(event_id)
+            df_dict['time'].append(event.timestamp)
+            df_dict['label'].append(str(event.label))
+            df_dict['recipe'].append(self.get_event_recipe(event_id))
+            df_dict['complexity'].append(self.get_event_complexity(event_id))
+            df_dict["memorability"].append(self.get_memorability(event_id))
+        df = pd.DataFrame.from_dict(df_dict)
+        df['date'] = pd.to_datetime(df["time"], unit="s")
+        return df
 
     #############################################################
     #       MAIN LOOP                                           #

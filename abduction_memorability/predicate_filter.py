@@ -5,6 +5,8 @@ all events of the memory
 import datetime as dt
 from dateutil.relativedelta import relativedelta
 from .memory import Memory
+from abduction_memorability.helpers import Helpers
+import math
 from .predicate import Predicate, AxisRankPredicate, MonthPredicate, DayPredicate,\
     HasLabelPredicate, LocationPredicate, RandomChoicePredicate
 from .helpers import timing
@@ -12,8 +14,9 @@ from abduction_memorability.event import Event
 
 
 class Filter:
-    def __init__(self, predicate: Predicate):
+    def __init__(self, predicate: Predicate, number_of_predicates=1):
         self._predicate = predicate
+        self._number_of_predicates = number_of_predicates
 
     def __call__(self, memory: Memory) -> Memory:
         """
@@ -28,7 +31,11 @@ class Filter:
             if should_keep:
                 selected.append(event)
         old_recipe = memory.recipe()
-        return Memory(selected, recipe=old_recipe + [str(self._predicate)])
+        old_complexity = memory.complexity()
+        concept_complexity = math.log2(self._number_of_predicates) + 1
+        return Memory(selected,
+                      recipe=old_recipe + [str(self._predicate)],
+                      complexity=old_complexity + self._predicate.program_length() + concept_complexity)
 
 
 class NewFilter:
@@ -92,7 +99,11 @@ class NewFilter:
                           complexity=old_complexity + pred.program_length())
         else:
             pred = self._pred_type(memory, pred_prog, additional_event)
-            return None
+            otherFilt = OptimizedFilter(pred)
+            res = otherFilt(memory)
+            if res is None:
+                return res
+            return Memory(res, recipe=res.recipe(), complexity=old_complexity + pred.program_length())
 
 
 class OptimizedFilter(Filter):
@@ -101,10 +112,13 @@ class OptimizedFilter(Filter):
     Not quite as elegant, but much faster !
     """
 
-    def __init__(self, predicate: Predicate):
-        super().__init__(predicate)
+    def __init__(self, predicate: Predicate, number_of_predicates=1):
+        super().__init__(predicate, number_of_predicates=number_of_predicates)
 
     def __call__(self, memory: Memory) -> Memory:
+        old_recipe = memory.recipe()
+        old_complexity = memory.complexity()
+        concept_complexity = math.log2(self._number_of_predicates) + 1
         if isinstance(self._predicate, AxisRankPredicate):
             try:
                 selected = self._predicate.get_mem().get_kth_along_axis(
@@ -113,8 +127,9 @@ class OptimizedFilter(Filter):
                     revert=self._predicate.get_revert()
                 )
                 # print(selected)
-                old_recipe = memory.recipe()
-                return Memory(selected, recipe=old_recipe + [str(self._predicate)])
+                return Memory(selected,
+                              recipe=old_recipe + [str(self._predicate)],
+                              complexity=old_complexity + concept_complexity + self._predicate.program_length())
             except Exception as exc:
                 return None
         if isinstance(self._predicate, MonthPredicate):
@@ -123,10 +138,10 @@ class OptimizedFilter(Filter):
             self._predicate: MonthPredicate
             try:
                 target_date = memory.get_past_month(self._predicate.get_month())
-                old_recipe = memory.recipe()
                 return Memory(
                     memory.get_month_events(target_date),
-                    recipe=old_recipe + [str(self._predicate)])
+                    recipe=old_recipe + [str(self._predicate)],
+                    complexity=old_complexity + concept_complexity + self._predicate.program_length())
             except Exception as exc:
                 return None
         if isinstance(self._predicate, DayPredicate):
@@ -134,10 +149,25 @@ class OptimizedFilter(Filter):
                 return None
             try:
                 target_date = memory.get_past_day(self._predicate.get_day())
-                old_recipe = memory.recipe()
                 return Memory(
                     memory.get_day_events(target_date),
-                    recipe=old_recipe + [str(self._predicate)])
+                    recipe=old_recipe + [str(self._predicate)],
+                    complexity=old_complexity + concept_complexity + self._predicate.program_length()
+                )
+            except:
+                return None
+        if isinstance(self._predicate, RandomChoicePredicate):
+            try:
+                selection = memory.get_event_by_id(memory.all_ids()[self._predicate._prog])
+                if selection is None:
+                    return None
+                # if len(memory) > 30:
+                #     return None
+                return Memory(
+                    [selection],
+                    recipe=old_recipe + [str(self._predicate)],
+                    complexity=old_complexity + concept_complexity + self._predicate.program_length()
+                )
             except:
                 return None
         return super().__call__(memory)
